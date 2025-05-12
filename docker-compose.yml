@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  lms-backend:
+    container_name: lms-backend
+    image: node:20-alpine
+    network_mode: "host"
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    command: sh -c "npm install && npx prisma generate && npm run build:prod && node dist/bundle.js"

@@ -1,0 +1,402 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+  WITHDRAWN
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+  NOT_RECORDED
+}
+
+enum RoleType {
+  PRESIDENT
+  CPD_HEAD
+  CBD_HEAD
+  CYBER_HEAD
+  DEV_HEAD
+  DATA_SCIENCE_HEAD
+  MEMBER
+}
+
+enum ResourceType {
+  LINK
+  VIDEO
+  PHOTO
+  BOOK
+  OTHER
+}
+
+enum EventType {
+  PUBLIC
+  PRIVATE
+  MEMBERS_ONLY
+}
+
+enum ElectionStatus {
+  DRAFT
+  NOMINATION
+  VOTING
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+enum NominationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                      String     @id @default(auto()) @map("_id") @db.ObjectId
+  freeName                String
+  email                   String     @unique
+  studentId               String?
+  gmailId                 String?
+  contact                 String?
+  note                    String?
+  expectedGenerationYear  String?
+  discoveredDate          String?
+  fieldOfStudy            String?
+  unifiedById             String?
+  passwordLink            String?
+  statusDates             String?
+  customerStatusLink      String?
+  adminLink               String?
+  personalStatusLink      String?
+  shortListDescription    String?
+  lastName                String?
+  firstAddress            String?
+  alternateEmail          String?
+  profileImage            String?
+  githubProfile           String?
+  supportHandle           String?
+  successions             String?
+  skills                  String[]
+  historyNotes            String?
+
+  password                String
+  role                    RoleType      @default(MEMBER)
+  divisionId              String?       @db.ObjectId
+  division                Division?     @relation(fields: [divisionId], references: [id])
+  isEmailVerified         Boolean       @default(false)
+  status                  MemberStatus  @default(ACTIVE)
+
+  // Division Removal Tracking
+  isRemovedFromDivision   Boolean       @default(false)
+  removedFromDivisionAt   DateTime?
+  removedFromDivisionBy   String?       @db.ObjectId
+  divisionRemovalReason   String?
+  previousDivisionId      String?       @db.ObjectId
+
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  verificationTokens      VerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  attendanceRecords       Attendance[]  @relation("MemberAttendance")
+  attendanceMarked        Attendance[]  @relation("MarkedBy")
+  resources               Resource[]    @relation("UserResources")
+  reminders               Reminder[]    @relation("UserReminders")
+  userGroups              UsersInGroups[]
+  articles                Article[]     @relation("UserArticles")
+  comments                Comment[]     @relation("UserComments")
+  sessionMemberships      SessionMembership[]
+  nominations             Nomination[]  @relation("UserNominations")
+  votesCast               Vote[]        @relation("VotesCast")
+  votesReceived           Vote[]        @relation("VotesReceived")
+  createdElections        Election[]    @relation("CreatedElections")
+  changedElections        ElectionHistory[] @relation("ElectionHistoryChangedBy")
+
+  Election Election[]
+
+  Nomination Nomination[]
+}
+
+model VerificationToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  used      Boolean  @default(false)
+}
+
+model OTP {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  code      String
+  purpose   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Division {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  name        String     @unique
+  description String?
+  headId      String?    @db.ObjectId
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  resources   Resource[] @relation("DivisionResources")
+  groups      Group[]    @relation("DivisionGroups")
+  members     User[]
+  sessions    Session[]
+  elections   Election[]
+  articles    Article[]  @relation("DivisionArticles")
+}
+
+
+
+model Resource {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  url         String
+  type        ResourceType @default(LINK)
+  description String?
+  divisionId  String?      @db.ObjectId
+  division    Division?    @relation("DivisionResources", fields: [divisionId], references: [id])
+  ownerId     String?      @db.ObjectId
+  owner       User?        @relation("UserResources", fields: [ownerId], references: [id])
+  createdAt   DateTime     @default(now())
+}
+
+model Reminder {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  dueDate     DateTime
+  userId      String   @db.ObjectId
+  user        User     @relation("UserReminders", fields: [userId], references: [id], onDelete: Cascade)
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Group {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  divisionId  String     @db.ObjectId
+  division    Division   @relation("DivisionGroups", fields: [divisionId], references: [id], onDelete: Cascade)
+  createdById String     @db.ObjectId
+  users       UsersInGroups[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model UsersInGroups {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  groupId      String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  isRemoved    Boolean  @default(false)
+
+  @@unique([userId, groupId], name: "userId_groupId")
+}
+
+model Article {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  content     String
+  authorId    String     @db.ObjectId
+  author      User       @relation("UserArticles", fields: [authorId], references: [id])
+  divisionId  String?    @db.ObjectId
+  division    Division?  @relation("DivisionArticles", fields: [divisionId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  comments    Comment[]
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  userId    String   @db.ObjectId
+  user      User     @relation("UserComments", fields: [userId], references: [id])
+  articleId String   @db.ObjectId
+  article   Article  @relation(fields: [articleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Session {
+  id              String               @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  description     String?
+  startTime       DateTime
+  endTime         DateTime
+  location        String
+  divisionId      String               @db.ObjectId
+  division        Division             @relation(fields: [divisionId], references: [id])
+  userMemberships SessionMembership[] @relation("SessionToMemberships")
+  attendance      Attendance[]        @relation("SessionToAttendance")
+  createdAt       DateTime            @default(now())
+}
+
+model SessionMembership {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id])
+  sessionId  String   @db.ObjectId
+  session    Session  @relation(fields: [sessionId], references: [id], name: "SessionToMemberships")
+  joinedAt   DateTime @default(now())
+}
+
+model Attendance {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  memberId    String     @db.ObjectId
+  member      User       @relation("MemberAttendance", fields: [memberId], references: [id])
+  date        DateTime
+  status      AttendanceStatus
+  markedById  String     @db.ObjectId
+  markedBy    User       @relation("MarkedBy", fields: [markedById], references: [id])
+  sessionId   String     @db.ObjectId
+  session     Session    @relation(fields: [sessionId], references: [id], name: "SessionToAttendance")
+  createdAt   DateTime   @default(now())
+}
+
+
+model Election {
+  id               String         @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  description      String?
+  status           ElectionStatus @default(DRAFT)
+  divisionId       String         @db.ObjectId
+  division         Division       @relation(fields: [divisionId], references: [id])
+  createdById      String         @db.ObjectId
+  createdBy        User           @relation("CreatedElections", fields: [createdById], references: [id])
+  
+  nominationStart  DateTime
+  nominationEnd    DateTime
+  votingStart      DateTime
+  votingEnd        DateTime
+  resultsDate      DateTime?
+  
+  minSeniority     Int?           @default(1)
+  allowSelfNominate Boolean       @default(true)
+  eligibleRoleIds  String[]       @db.ObjectId
+  
+  winnerId         String?        @db.ObjectId
+  winner           User?          @relation(fields: [winnerId], references: [id])
+  voteCount        Int?           @default(0)
+  
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  nominations      Nomination[]
+  votes            Vote[]
+  history          ElectionHistory[]
+}
+
+model Nomination {
+  id            String           @id @default(auto()) @map("_id") @db.ObjectId
+  electionId    String           @db.ObjectId
+  election      Election         @relation(fields: [electionId], references: [id])
+  nomineeId     String           @db.ObjectId
+  nominee       User             @relation("UserNominations", fields: [nomineeId], references: [id])
+  nominatedById String           @db.ObjectId
+  nominatedBy   User             @relation(fields: [nominatedById], references: [id])
+  position      RoleType
+  status        NominationStatus @default(PENDING)
+  reason        String?
+  rejectionNote String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model Vote {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  electionId  String   @db.ObjectId
+  election    Election @relation(fields: [electionId], references: [id])
+  voterId     String   @db.ObjectId
+  voter       User     @relation("VotesCast", fields: [voterId], references: [id])
+  candidateId String   @db.ObjectId
+  candidate   User     @relation("VotesReceived", fields: [candidateId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([electionId, voterId])
+}
+
+model ElectionHistory {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  electionId  String   @db.ObjectId
+  election    Election @relation(fields: [electionId], references: [id])
+  action      String
+  details     String?
+  changedById String   @db.ObjectId
+  changedBy   User     @relation("ElectionHistoryChangedBy", fields: [changedById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Event {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  location    String
+  date        DateTime
+  status      EventType  @default(PRIVATE)
+  createdAt   DateTime   @default(now())
+}
+
+model SmtpConfig {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  user      String
+  key       String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  @db.ObjectId
+  updatedBy String?  @db.ObjectId
+
+  @@map("smtp_configs")
+}
+
+
+model Faq {
+  id        String   @id @default(uuid()) @map("_id")
+  question  String
+  answer    String
+  createdAt DateTime @default(now())
+}
+
+model Rule {
+  id          String   @id @default(uuid()) @map("_id")
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model Testimonial {
+  id          String   @id @default(uuid()) @map("_id")
+  name        String
+  role        String
+  description String
+  createdAt   DateTime @default(now())
+}
